@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    # command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes: 
+      - redis:/data
+    networks:
+      - emd
+
+  db:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    networks:
+      - emd
+    volumes:
+      - type: volume
+        source: MONGO_DATA
+        target: /data/db
+      - type: volume
+        source: MONGO_CONFIG
+        target: /data/configdb
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - WEB_URI=http://localhost:3000
+      - SERVER_URI=http://localhost:8000
+      - DATABASE_URL=mongodb://db:27017/email-management-demo
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GOOGLE_CLIENT_ID=
+      - GOOGLE_CLIENT_SECRET=
+      - GOOGLE_REDIRECT_PATH=/api/v1/auth/google/callback
+      - GOOGLE_SCOPES=https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/userinfo.profile,https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.modify
+    restart: on-failure
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    networks:
+      - emd
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - VITE_SERVER_URI=http://localhost:8000
+    restart: on-failure
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    networks:
+      - emd
+
+networks:
+  emd:
+    driver: bridge
+
+volumes:
+  MONGO_DATA:
+    name: MONGO_DATA
+  MONGO_CONFIG:
+    name: MONGO_CONFIG
+  redis:
+    driver: local
